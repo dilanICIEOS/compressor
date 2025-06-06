@@ -1,5 +1,5 @@
 {
-  "name": "@icieos/img-compressor",
+  "name": "img-compressor",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",

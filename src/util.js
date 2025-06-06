@@ -11,9 +11,8 @@ import imageCompression from 'browser-image-compression';
 export async function compressImage(file, maxSizeMB) {
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
 
-  const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
-
   // Load original dimensions
+  const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
   const origDims = await getImageDimensions(file);
   console.log(` Original dimensions: ${origDims.width} × ${origDims.height}, ${originalSizeMB} MB`);
 
@@ -25,14 +24,13 @@ export async function compressImage(file, maxSizeMB) {
   const options = {
     maxSizeMB,
     useWebWorker: true,
-    maxWidthOrHeight: undefined
   };
 
   try {
     const compressed = await imageCompression(file, options);
+    
     const compressedSizeMB = (compressed.size / 1024 / 1024).toFixed(2);
     const compressedDims = await getImageDimensions(compressed);
-
     console.log(`Compressed dimensions: ${compressedDims.width} × ${compressedDims.height}, ${compressedSizeMB} MB`);
 
     return compressed;
@@ -46,7 +44,8 @@ export async function compressImage(file, maxSizeMB) {
  * @param {File|Blob} file 
  * @returns {Promise<{width: number, height: number}>}
  */
-function getImageDimensions(file) {
+export function getImageDimensions(file) {  
+  if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -57,3 +56,17 @@ function getImageDimensions(file) {
   });
 }
 
+/**
+ * Utility to check image has min width.
+ * @param {File|Blob} file 
+ * @param {number} minW - min width to be checked
+ * @param {number} minH - min height to be checked
+ * @returns {Promise<boolean>} true if has minimum dimensions
+ */
+export async function hasMinDimension(file, minW, minH) {
+  if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
+  const {width, height} = await getImageDimensions(file)
+  
+  if(width < minW || height < minH) return false
+  return true
+}

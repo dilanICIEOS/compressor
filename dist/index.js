@@ -10,9 +10,9 @@ import imageCompression from 'browser-image-compression';
  */
 async function compressImage(file, maxSizeMB) {
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
-  const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
 
   // Load original dimensions
+  const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
   const origDims = await getImageDimensions(file);
   console.log(` Original dimensions: ${origDims.width} × ${origDims.height}, ${originalSizeMB} MB`);
 
@@ -22,8 +22,7 @@ async function compressImage(file, maxSizeMB) {
   }
   const options = {
     maxSizeMB,
-    useWebWorker: true,
-    maxWidthOrHeight: undefined
+    useWebWorker: true
   };
   try {
     const compressed = await imageCompression(file, options);
@@ -42,6 +41,7 @@ async function compressImage(file, maxSizeMB) {
  * @returns {Promise<{width: number, height: number}>}
  */
 function getImageDimensions(file) {
+  if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -53,6 +53,23 @@ function getImageDimensions(file) {
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
+}
+
+/**
+ * Utility to check image has min width.
+ * @param {File|Blob} file 
+ * @param {number} minW - min width to be checked
+ * @param {number} minH - min height to be checked
+ * @returns {Promise<boolean>} true if has minimum dimensions
+ */
+async function hasMinDimension(file, minW, minH) {
+  if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
+  const {
+    width,
+    height
+  } = await getImageDimensions(file);
+  if (width < minW || height < minH) return false;
+  return true;
 }
 
 // Helper to wrap canvas.toBlob in a Promise
@@ -70,13 +87,26 @@ function canvasToBlob(canvas, type, quality) {
  * Keeps image type (PNG, JPEG, etc.) for output.
  * @param {File} file - File object from the file input
  * @param {number} targetW - Target crop width
- * @param {number} targetH - Target crop height
+ * @param {number} targetH - Target crop heighth
  * @param {number} maxMbLimit - Maxximum mb limit to reduce the size (default: undefined)
  * @returns {Promise<File>} Cropped File object
  */
 
-async function cropImage(file, targetW, targetH, maxMbLimit) {
+async function cropImage({
+  file,
+  targetW,
+  targetH,
+  maxMbLimit
+}) {
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
+  const {
+    width,
+    height
+  } = await getImageDimensions(file);
+  if (width <= targetW || height <= targetH) {
+    if (file.size / 1024 / 1024 < maxMbLimit) return file;
+    return await compressImage(file, maxMbLimit);
+  }
   const img = await new Promise((resolve, reject) => {
     const i = new Image();
     const objectUrl = URL.createObjectURL(file);
@@ -121,79 +151,5 @@ async function cropImage(file, targetW, targetH, maxMbLimit) {
   return croppedFile;
 }
 
-// export  function cropImage(file, targetW, targetH, maxMbLimit) {
-//   return new Promise((resolve, reject) => {
-//     const img = new Image();
-//     const objectUrl = URL.createObjectURL(file);
-
-//     img.onload = () => {
-//       const origW = img.naturalWidth;
-//       const origH = img.naturalHeight;
-
-//       // Scale so image fully covers target crop area (cover strategy)
-//       const scale = Math.max(targetW / origW, targetH / origH);
-//       const newW = Math.ceil(origW * scale);
-//       const newH = Math.ceil(origH * scale);
-
-//       // Draw resized image on temp canvas
-//       const tempCanvas = document.createElement('canvas');
-//       tempCanvas.width = newW;
-//       tempCanvas.height = newH;
-//       const tctx = tempCanvas.getContext('2d');
-//       tctx.drawImage(img, 0, 0, newW, newH);
-
-//       // Crop center rectangle
-//       const cropX = Math.floor((newW - targetW) / 2);
-//       const cropY = Math.floor((newH - targetH) / 2);
-
-//       const outCanvas = document.createElement('canvas');
-//       outCanvas.width = targetW;
-//       outCanvas.height = targetH;
-//       const octx = outCanvas.getContext('2d');
-//       octx.drawImage(tempCanvas, cropX, cropY, targetW, targetH, 0, 0, targetW, targetH);
-
-//       // Determine output format and quality
-//       let mimeType = file.type;
-//       if (!mimeType || mimeType === 'image/svg+xml') mimeType = 'image/png';
-
-//       // Set quality for JPEG only, else quality param ignored
-//       const quality = mimeType === 'image/jpeg' ? 0.9 : undefined;
-
-//       outCanvas.toBlob((blob) => {
-//         URL.revokeObjectURL(objectUrl);
-//         if (blob) {
-//           // Preserve original file name & extension
-//           const originalName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-//           const extension = mimeType.split('/')[1] || 'png'; // e.g. 'jpeg', 'png'
-
-//           // Fix extension for jpeg types
-//           const ext = extension === 'jpeg' ? 'jpg' : extension;
-
-//           const croppedFile = new File([blob], `${originalName}.${ext}`, { type: mimeType });
-//           if(maxMbLimit){
-//             try{
-//               const compressedFile = compressImage(croppedFile, maxMbLimit)
-//               resolve(compressedFile)
-//             }catch(e){
-//               reject(e)
-//             }
-//           }else{
-//             resolve(croppedFile);
-//           }
-//         } else {
-//           reject('Canvas toBlob failed');
-//         }
-//       }, mimeType, quality);
-//     };
-
-//     img.onerror = () => {
-//       URL.revokeObjectURL(objectUrl);
-//       reject('Image load error');
-//     };
-
-//     img.src = objectUrl;
-//   });
-// }
-
-export { compressImage, cropImage };
+export { compressImage, cropImage, getImageDimensions, hasMinDimension };
 //# sourceMappingURL=index.js.map
