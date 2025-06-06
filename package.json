@@ -1,0 +1,26 @@
+{
+  "name": "@icieos/img-compressor",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "scripts": {
+    "build": "rollup -c"
+  },
+  "devDependencies": {
+    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^3.29.5"
+  },
+  "dependencies": {
+    "browser-image-compression": "^2.0.2"
+  }
+}
