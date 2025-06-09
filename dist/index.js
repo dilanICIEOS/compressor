@@ -1,38 +1,79 @@
-import imageCompression from 'browser-image-compression';
+// imageCompression.js
+// Utility for compressing an image file in the browser *without* changing its pixel dimensions.
 
 /**
- * Compress an image File to a target max size in MB.
- * Logs original and compressed size + dimensions.
+ * Compress an image so its file size is below `maxMB` MiB while keeping the original width & height.
  * 
- * @param {File} file - The original image File
- * @param {number} maxSizeMB - Target max size in megabytes
- * @returns {Promise<File>} - Compressed File
+ * The algorithm progressively lowers JPEG quality (or uses WebP fallback for PNG/GIF) until the
+ * desired size is reached, or it hits a minimum quality threshold.
+ * 
+ * @param {File}  file        – The source image File/Blob selected by the user.
+ * @param {number} maxMB      – Maximum size in mebibytes (MiB) for the compressed file.
+ * @param {Object} [opts]     – Optional settings.
+ * @param {number} [opts.minQuality=0.3] – Lowest allowed quality before giving up.
+ * @param {number} [opts.step=0.05]      – Step by which to decrease quality each iteration.
+ * @returns {Promise<File>}             – A new File under the size limit, or the original file if
+ *                                        already below the limit (or if we can’t compress enough).
  */
-async function compressImage(file, maxSizeMB) {
+async function compressImage(file, maxMB, opts = {}) {
+  const {
+    minQuality = 0.3,
+    step = 0.05
+  } = opts;
+  if (!(file instanceof File)) {
+    throw new TypeError("compressImage expects a File instance");
+  }
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
+  if (file.size / 1048576 <= maxMB) return file; // already small enough
 
-  // Load original dimensions
-  const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
-  const origDims = await getImageDimensions(file);
-  console.log(` Original dimensions: ${origDims.width} × ${origDims.height}, ${originalSizeMB} MB`);
+  const dataUrl = await _fileToDataURL(file);
+  const img = await _dataURLToImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  let quality = 0.95; // start near‑visually‑lossless
+  let blob = await _canvasToBlob(canvas, file.type, quality);
 
-  // Skip if already under threshold
-  if (file.size / 1024 / 1024 <= maxSizeMB) {
-    return file;
+  // If the original was PNG/GIF, switch to WebP/JPEG for better compression
+  const lossyType = /png|gif/i.test(file.type) ? "image/webp" : "image/jpeg";
+  while (blob.size / 1048576 > maxMB && quality > minQuality) {
+    quality = Math.max(quality - step, minQuality);
+    blob = await _canvasToBlob(canvas, lossyType, quality);
   }
-  const options = {
-    maxSizeMB,
-    useWebWorker: true
-  };
-  try {
-    const compressed = await imageCompression(file, options);
-    const compressedSizeMB = (compressed.size / 1024 / 1024).toFixed(2);
-    const compressedDims = await getImageDimensions(compressed);
-    console.log(`Compressed dimensions: ${compressedDims.width} × ${compressedDims.height}, ${compressedSizeMB} MB`);
-    return compressed;
-  } catch (err) {
-    throw err;
-  }
+
+  // If we still couldn’t hit the target, return the smaller of the two (blob vs original)
+  const finalBlob = blob.size < file.size ? blob : file;
+  return new File([finalBlob], _renameWithExtension(file.name, finalBlob.type), {
+    type: finalBlob.type,
+    lastModified: Date.now()
+  });
+}
+
+// ---------- Helpers ----------
+function _fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = e => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+function _dataURLToImage(dataURL) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataURL;
+  });
+}
+function _canvasToBlob(canvas, type, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+function _renameWithExtension(originalName, mimeType) {
+  const ext = mimeType.split("/")[1].replace("jpeg", "jpg");
+  return originalName.replace(/\.[^.]+$/, "." + ext);
 }
 
 /**
@@ -88,7 +129,7 @@ function canvasToBlob(canvas, type, quality) {
  * @param {File} file - File object from the file input
  * @param {number} targetW - Target crop width
  * @param {number} targetH - Target crop heighth
- * @param {number} maxMbLimit - Maxximum mb limit to reduce the size (default: undefined)
+ * @param {number} maxMB - Maxximum mb limit to reduce the size (default: undefined)
  * @returns {Promise<File>} Cropped File object
  */
 
@@ -96,7 +137,7 @@ async function cropImage({
   file,
   targetW,
   targetH,
-  maxMbLimit
+  maxMB
 }) {
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
   if (!targetH && !targetW) return file;
@@ -105,8 +146,8 @@ async function cropImage({
     height
   } = await getImageDimensions(file);
   if (width <= targetW || height <= targetH) {
-    if (file.size / 1024 / 1024 < maxMbLimit) return file;
-    return await compressImage(file, maxMbLimit);
+    if (file.size / 1024 / 1024 < maxMB) return file;
+    return await compressImage(file, maxMB);
   }
   const img = await new Promise((resolve, reject) => {
     const i = new Image();
@@ -154,8 +195,8 @@ async function cropImage({
   const croppedFile = new File([blob], `${originalName}.${ext}`, {
     type: mimeType
   });
-  if (maxMbLimit) {
-    return await compressImage(croppedFile, maxMbLimit);
+  if (maxMB) {
+    return await compressImage(croppedFile, maxMB);
   }
   return croppedFile;
 }

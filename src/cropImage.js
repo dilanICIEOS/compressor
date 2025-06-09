@@ -1,4 +1,5 @@
-import { compressImage, getImageDimensions } from "./util";
+import { compressImage } from "./compressImage";
+import { getImageDimensions } from "./util";
 
 // Helper to wrap canvas.toBlob in a Promise
 function canvasToBlob(canvas, type, quality) {
@@ -17,11 +18,11 @@ function canvasToBlob(canvas, type, quality) {
  * @param {File} file - File object from the file input
  * @param {number} targetW - Target crop width
  * @param {number} targetH - Target crop heighth
- * @param {number} maxMbLimit - Maxximum mb limit to reduce the size (default: undefined)
+ * @param {number} maxMB - Maxximum mb limit to reduce the size (default: undefined)
  * @returns {Promise<File>} Cropped File object
  */
 
-export async function cropImage({file, targetW, targetH, maxMbLimit}) {
+export async function cropImage({file, targetW, targetH, maxMB}) {
   
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
   if(!targetH && !targetW) return file
@@ -29,8 +30,8 @@ export async function cropImage({file, targetW, targetH, maxMbLimit}) {
   const {width, height} = await getImageDimensions(file)
   
   if(width <= targetW || height <= targetH){
-    if((file.size / 1024 / 1024) < maxMbLimit) return file
-    return await compressImage(file, maxMbLimit);
+    if((file.size / 1024 / 1024) < maxMB) return file
+    return await compressImage(file, maxMB);
   } 
   
   const img = await new Promise((resolve, reject) => {
@@ -91,8 +92,8 @@ export async function cropImage({file, targetW, targetH, maxMbLimit}) {
 
   const croppedFile = new File([blob], `${originalName}.${ext}`, { type: mimeType });
 
-  if (maxMbLimit) {
-    return await compressImage(croppedFile, maxMbLimit);
+  if (maxMB) {
+    return await compressImage(croppedFile, maxMB);
   }
 
   return croppedFile;

@@ -18,7 +18,7 @@ export { cropImage } from './cropImage';
  * @param {number} maxSizeMB - Target max size in megabytes
  * @returns {Promise<File>} - Compressed File
  */
-export { compressImage } from './util'; 
+export { compressImage } from './compressImage'; 
 
 
 
