@@ -99,6 +99,7 @@ async function cropImage({
   maxMbLimit
 }) {
   if (!file.type.startsWith('image/')) throw new Error('Only image files are supported');
+  if (!targetH && !targetW) return file;
   const {
     width,
     height
@@ -122,9 +123,17 @@ async function cropImage({
   });
   const origW = img.naturalWidth;
   const origH = img.naturalHeight;
-  const scale = Math.max(targetW / origW, targetH / origH);
+  const scaleX = targetW ? targetW / origW : 0;
+  const scaleY = targetH ? targetH / origH : 0;
+  const scale = Math.max(scaleX, scaleY);
   const newW = Math.ceil(origW * scale);
   const newH = Math.ceil(origH * scale);
+  if (!targetW || targetW === 0) {
+    targetW = scale * origW;
+  }
+  if (!targetH || targetH === 0) {
+    targetH = scale * origH;
+  }
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = newW;
   tempCanvas.height = newH;

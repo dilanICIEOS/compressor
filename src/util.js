@@ -20,7 +20,6 @@ export async function compressImage(file, maxSizeMB) {
   if (file.size / 1024 / 1024 <= maxSizeMB) {
     return file;
   }
-
   const options = {
     maxSizeMB,
     useWebWorker: true,
@@ -28,7 +27,6 @@ export async function compressImage(file, maxSizeMB) {
 
   try {
     const compressed = await imageCompression(file, options);
-    
     const compressedSizeMB = (compressed.size / 1024 / 1024).toFixed(2);
     const compressedDims = await getImageDimensions(compressed);
     console.log(`Compressed dimensions: ${compressedDims.width} × ${compressedDims.height}, ${compressedSizeMB} MB`);
@@ -38,6 +36,7 @@ export async function compressImage(file, maxSizeMB) {
     throw err;
   }
 }
+
 
 /**
  * Utility to get image dimensions from a File or Blob.
@@ -55,6 +54,7 @@ export function getImageDimensions(file) {
     img.src = URL.createObjectURL(file);
   });
 }
+
 
 /**
  * Utility to check image has min width.
